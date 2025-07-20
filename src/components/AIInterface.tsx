@@ -1,11 +1,31 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Mic, MicOff, Pause, Play, Square, Send, LogOut, Monitor, AlertCircle, Globe, Bot, User } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Progress } from './ui/progress';
+import { ScrollArea } from './ui/scroll-area';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
+import { 
+  Mic, 
+  MicOff, 
+  Send, 
+  Play, 
+  Pause, 
+  Square, 
+  Monitor,
+  User,
+  Bot,
+  Loader2,
+  Settings,
+  LogOut,
+  UserCircle
+} from 'lucide-react';
 
 interface Message {
   id: string;
@@ -14,158 +34,258 @@ interface Message {
   timestamp: Date;
 }
 
-interface BrowserSession {
-  steps: string[];
-  currentStep: number;
-  screenshotUrl: string;
-  status: 'idle' | 'browsing' | 'paused' | 'waiting_confirmation';
-  requiresConfirmation: boolean;
-}
+type BrowserStatus = 'idle' | 'running' | 'paused' | 'completed' | 'error';
 
-interface AIInterfaceProps {
-  userName: string;
-  onLogout: () => void;
-}
-
-export const AIInterface: React.FC<AIInterfaceProps> = ({ userName, onLogout }) => {
+export const AIInterface = () => {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       type: 'ai',
-      content: `Hello ${userName}! I'm your AI browsing assistant powered by Gemini. Tell me what you'd like me to do - order food, book a ride, find products, or anything else. I'll browse the web live for you and you can take control anytime! You can even give me your passwords and I'll handle logins securely.`,
-      timestamp: new Date(),
-    },
+      content: 'Hello! I\'m your AI assistant. I can browse the web and perform tasks for you. What would you like me to do?',
+      timestamp: new Date()
+    }
   ]);
-  const [inputValue, setInputValue] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [browserSession, setBrowserSession] = useState<BrowserSession>({
-    steps: [],
-    currentStep: 0,
-    screenshotUrl: 'https://via.placeholder.com/800x600/0f0f23/8b5cf6?text=AI+Browser+Ready+%0APowered+by+Gemini+%26+Live+Automation%0AType+a+command+to+start+browsing',
-    status: 'idle',
-    requiresConfirmation: false
-  });
+  const [inputMessage, setInputMessage] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [browserStatus, setBrowserStatus] = useState<BrowserStatus>('idle');
+  const [currentStep, setCurrentStep] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(0);
+  const [screenshotUrl, setScreenshotUrl] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const screenshotRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    scrollToBottom();
+    if (!user) {
+      navigate('/auth');
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+    if (!inputMessage.trim() || !user) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      content: inputValue,
-      timestamp: new Date(),
+      content: inputMessage,
+      timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
-    const currentInput = inputValue;
-    setInputValue('');
+    setInputMessage('');
+    setIsLoading(true);
 
     try {
-      // Call Gemini API to understand user intent
-      const { data, error } = await supabase.functions.invoke('gemini-chat', {
-        body: { message: currentInput }
+      // Get the session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      // First, get AI response
+      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('gemini-chat', {
+        body: { 
+          message: inputMessage,
+          context: 'web browsing assistant'
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
-      if (error) throw error;
+      if (aiError) throw aiError;
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: data.response,
-        timestamp: new Date(),
+        content: aiResponse.response,
+        timestamp: new Date()
       };
+
       setMessages(prev => [...prev, aiMessage]);
 
-      // Start browser automation
-      await startBrowserSession(currentInput);
-
-    } catch (error) {
-      console.error('Error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to process your request. Please make sure Gemini API key is configured.",
-        variant: "destructive"
+      // Then start browser automation
+      const { data: browserResponse, error: browserError } = await supabase.functions.invoke('browser-automation', {
+        body: {
+          action: 'start_session',
+          task: inputMessage
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
+
+      if (browserError) throw browserError;
+
+      if (browserResponse.success) {
+        setSessionId(browserResponse.sessionId);
+        setTotalSteps(browserResponse.steps.length);
+        setCurrentStep(browserResponse.currentStep);
+        setBrowserStatus('running');
+        
+        // Start polling for screenshots
+        startScreenshotPolling(browserResponse.sessionId);
+      }
+
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error('Failed to process request: ' + error.message);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        type: 'ai',
+        content: 'I apologize, but I encountered an error processing your request. Please try again.',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const startBrowserSession = async (task: string) => {
-    try {
-      setBrowserSession(prev => ({ ...prev, status: 'browsing' }));
-      
-      // Determine action type based on task
-      let action = 'general_browsing';
-      if (task.toLowerCase().includes('order') || task.toLowerCase().includes('food') || task.toLowerCase().includes('latte') || task.toLowerCase().includes('coffee')) {
-        action = 'order_food';
-      } else if (task.toLowerCase().includes('ride') || task.toLowerCase().includes('uber') || task.toLowerCase().includes('taxi')) {
-        action = 'book_ride';
-      } else if (task.toLowerCase().includes('buy') || task.toLowerCase().includes('product') || task.toLowerCase().includes('amazon')) {
-        action = 'search_products';
+  const startScreenshotPolling = (sessionId: string) => {
+    const pollScreenshots = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data, error } = await supabase.functions.invoke('browser-automation', {
+          body: {
+            action: 'get_screenshot',
+            sessionId
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
+        });
+
+        if (error) throw error;
+
+        if (data.success) {
+          setScreenshotUrl(data.screenshotUrl);
+          setCurrentStep(data.currentStep);
+          
+          if (data.status === 'completed') {
+            setBrowserStatus('completed');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Screenshot polling error:', error);
       }
+    };
+
+    // Poll every 3 seconds
+    const interval = setInterval(pollScreenshots, 3000);
+    
+    // Clean up after 5 minutes
+    setTimeout(() => {
+      clearInterval(interval);
+    }, 300000);
+  };
+
+  const handlePause = async () => {
+    if (!sessionId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
       const { data, error } = await supabase.functions.invoke('browser-automation', {
-        body: { action, task }
+        body: {
+          action: 'pause_session',
+          sessionId
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
       if (error) throw error;
 
-      setBrowserSession({
-        steps: data.steps,
-        currentStep: 0,
-        screenshotUrl: data.screenshotUrl,
-        status: data.requiresConfirmation ? 'waiting_confirmation' : 'browsing',
-        requiresConfirmation: data.requiresConfirmation
-      });
-
-      // Simulate step progression
-      simulateStepProgression(data.steps);
-
-    } catch (error) {
-      console.error('Browser automation error:', error);
-      setBrowserSession(prev => ({ ...prev, status: 'idle' }));
+      if (data.success) {
+        setBrowserStatus('paused');
+        toast.success('Browser automation paused');
+      }
+    } catch (error: any) {
+      toast.error('Failed to pause: ' + error.message);
     }
   };
 
-  const simulateStepProgression = (steps: string[]) => {
-    steps.forEach((step, index) => {
-      setTimeout(() => {
-        setBrowserSession(prev => ({
-          ...prev,
-          currentStep: index,
-          screenshotUrl: `https://via.placeholder.com/800x600/0f0f23/8b5cf6?text=Step+${index + 1}%0A${encodeURIComponent(step)}`
-        }));
+  const handleResume = async () => {
+    if (!sessionId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-        // Add system message for each step
-        const systemMessage: Message = {
-          id: `step-${Date.now()}-${index}`,
-          type: 'system',
-          content: `🤖 ${step}`,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, systemMessage]);
-
-        // If last step and requires confirmation
-        if (index === steps.length - 1 && browserSession.requiresConfirmation) {
-          setBrowserSession(prev => ({ ...prev, status: 'waiting_confirmation' }));
-          const confirmMessage: Message = {
-            id: `confirm-${Date.now()}`,
-            type: 'ai',
-            content: "I've completed the browsing and found what you're looking for. Should I proceed with the final action? You can take control anytime if you want to complete it yourself, or give me your login details and I'll handle it securely.",
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, confirmMessage]);
+      const { data, error } = await supabase.functions.invoke('browser-automation', {
+        body: {
+          action: 'resume_session',
+          sessionId
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
-      }, (index + 1) * 2000);
-    });
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setBrowserStatus('running');
+        toast.success('Browser automation resumed');
+      }
+    } catch (error: any) {
+      toast.error('Failed to resume: ' + error.message);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!sessionId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await supabase.functions.invoke('browser-automation', {
+        body: {
+          action: 'stop_session',
+          sessionId
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setBrowserStatus('idle');
+        setSessionId(null);
+        setScreenshotUrl('');
+        setCurrentStep(0);
+        setTotalSteps(0);
+        toast.success('Browser automation stopped');
+      }
+    } catch (error: any) {
+      toast.error('Failed to stop: ' + error.message);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -175,252 +295,216 @@ export const AIInterface: React.FC<AIInterfaceProps> = ({ userName, onLogout }) 
     }
   };
 
-  const toggleVoiceRecording = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      toast({
-        title: "Voice Recording",
-        description: "ElevenLabs voice integration ready - API key needed for full functionality",
-      });
-    }
-  };
-
-  const toggleBrowsingPause = () => {
-    const newStatus = browserSession.status === 'paused' ? 'browsing' : 'paused';
-    setBrowserSession(prev => ({ ...prev, status: newStatus }));
-    
-    const statusMessage: Message = {
-      id: `status-${Date.now()}`,
-      type: 'system',
-      content: `🎮 Browser ${newStatus === 'paused' ? 'paused' : 'resumed'}`,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, statusMessage]);
-  };
-
-  const stopBrowsing = () => {
-    setBrowserSession({
-      steps: [],
-      currentStep: 0,
-      screenshotUrl: 'https://via.placeholder.com/800x600/0f0f23/8b5cf6?text=AI+Browser+Ready+%0APowered+by+Gemini+%26+Live+Automation%0AType+a+command+to+start+browsing',
-      status: 'idle',
-      requiresConfirmation: false
-    });
-    
-    const stopMessage: Message = {
-      id: `stop-${Date.now()}`,
-      type: 'system',
-      content: '🛑 Browser session stopped',
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, stopMessage]);
-  };
-
-  const confirmAction = () => {
-    setBrowserSession(prev => ({ ...prev, status: 'idle' }));
-    const confirmMessage: Message = {
-      id: `confirmed-${Date.now()}`,
-      type: 'ai',
-      content: "Perfect! I've completed the task for you. Is there anything else you'd like me to help you with?",
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, confirmMessage]);
-  };
-
-  const takeControl = () => {
-    const controlMessage: Message = {
-      id: `control-${Date.now()}`,
-      type: 'system',
-      content: '👤 You took control of the browser session',
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, controlMessage]);
-    
-    toast({
-      title: "Control Taken",
-      description: "You can now complete the task manually in the browser preview.",
-    });
-  };
-
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
-      {/* Chat Panel */}
-      <div className="w-1/2 border-r border-border flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-border flex justify-between items-center bg-card/50">
-          <div className="flex items-center gap-2">
-            <Bot className="h-6 w-6 text-primary animate-pulse" />
-            <h1 className="text-xl font-semibold text-primary">AI Assistant</h1>
-            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">Powered by Gemini</span>
-          </div>
-          <Button variant="outline" size="sm" onClick={onLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-
-        {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`flex gap-3 max-w-[80%] ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    message.type === 'user' ? 'bg-primary' : 
-                    message.type === 'system' ? 'bg-accent' : 'bg-secondary'
-                  }`}>
-                    {message.type === 'user' ? 
-                      <User className="h-4 w-4 text-primary-foreground" /> : 
-                      <Bot className="h-4 w-4 text-secondary-foreground" />
-                    }
-                  </div>
-                  <Card className={`${
-                    message.type === 'user' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : message.type === 'system'
-                      ? 'bg-accent text-accent-foreground'
-                      : 'bg-muted'
-                  }`}>
-                    <CardContent className="p-3">
-                      <p className="text-sm">{message.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {message.timestamp.toLocaleTimeString()}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div ref={messagesEndRef} />
-        </ScrollArea>
-
-        {/* Confirmation Controls */}
-        {browserSession.status === 'waiting_confirmation' && (
-          <div className="p-4 border-t border-border bg-accent/10">
-            <div className="flex space-x-2">
-              <Button onClick={confirmAction} className="flex-1">
-                <AlertCircle className="w-4 h-4 mr-2" />
-                Confirm Action
-              </Button>
-              <Button variant="outline" onClick={takeControl} className="flex-1">
-                <Monitor className="w-4 h-4 mr-2" />
-                Take Control
-              </Button>
+    <div className="h-screen bg-gradient-to-br from-background via-background/95 to-primary/5 flex flex-col">
+      {/* Header */}
+      <div className="border-b bg-card/50 backdrop-blur-sm p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-primary to-primary/70 rounded-lg flex items-center justify-center">
+              <Bot className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold">AI Browser Assistant</h1>
+              <p className="text-sm text-muted-foreground">Live web browsing powered by AI</p>
             </div>
           </div>
-        )}
-
-        {/* Input Area */}
-        <div className="p-4 border-t border-border">
-          <div className="flex space-x-2">
-            <Input
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Tell me what you want me to do... (I can handle passwords securely)"
-              className="flex-1"
-              disabled={browserSession.status === 'browsing'}
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleVoiceRecording}
-              className={isListening ? 'bg-red-500 text-white' : ''}
-              disabled={browserSession.status === 'browsing'}
-            >
-              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </Button>
-            <Button 
-              onClick={handleSendMessage} 
-              size="icon"
-              disabled={browserSession.status === 'browsing'}
-            >
-              <Send className="w-4 h-4" />
-            </Button>
+          <div className="flex items-center gap-2">
+            <Badge variant={browserStatus === 'running' ? 'default' : browserStatus === 'paused' ? 'secondary' : 'outline'}>
+              {browserStatus === 'running' && <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />}
+              {browserStatus.charAt(0).toUpperCase() + browserStatus.slice(1)}
+            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Avatar className="w-6 h-6 mr-2">
+                    <AvatarFallback>
+                      {user?.email?.charAt(0).toUpperCase() || <UserCircle className="w-4 h-4" />}
+                    </AvatarFallback>
+                  </Avatar>
+                  {user?.email?.split('@')[0]}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
 
-      {/* Browser Preview Panel */}
-      <div className="w-1/2 flex flex-col bg-muted/30">
-        {/* Browser Header */}
-        <div className="p-4 border-b border-border flex justify-between items-center bg-card/50">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <Globe className="ml-4 h-5 w-5 text-accent" />
-            <span className="text-sm text-muted-foreground">Live Browser Preview</span>
-            <div className={`ml-2 px-2 py-1 rounded-full text-xs ${
-              browserSession.status === 'idle' ? 'bg-gray-100 text-gray-600' :
-              browserSession.status === 'browsing' ? 'bg-green-100 text-green-600' :
-              browserSession.status === 'paused' ? 'bg-yellow-100 text-yellow-600' :
-              'bg-blue-100 text-blue-600'
-            }`}>
-              {browserSession.status.replace('_', ' ').toUpperCase()}
+      {/* Main Content */}
+      <div className="flex-1 flex">
+        {/* Chat Panel */}
+        <div className="w-1/2 border-r border-border flex flex-col">
+          {/* Messages */}
+          <ScrollArea className="flex-1 p-4">
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`flex gap-3 max-w-[85%] ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className={
+                        message.type === 'user' 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-secondary text-secondary-foreground'
+                      }>
+                        {message.type === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <Card className={`${
+                      message.type === 'user' 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted'
+                    }`}>
+                      <CardContent className="p-3">
+                        <p className="text-sm">{message.content}</p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {message.timestamp.toLocaleTimeString()}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="flex gap-3 max-w-[85%]">
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className="bg-secondary text-secondary-foreground">
+                        <Bot className="w-4 h-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <Card className="bg-muted">
+                      <CardContent className="p-3">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">AI is thinking...</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div ref={messagesEndRef} />
+          </ScrollArea>
+
+          {/* Input Area */}
+          <div className="p-4 border-t border-border">
+            <div className="flex gap-2">
+              <Input
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Tell me what you want me to do..."
+                className="flex-1"
+                disabled={isLoading}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsRecording(!isRecording)}
+                className={isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}
+                disabled={isLoading}
+              >
+                {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </Button>
+              <Button 
+                onClick={handleSendMessage} 
+                size="icon"
+                disabled={isLoading || !inputMessage.trim()}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
             </div>
           </div>
-          
-          {/* Browser Controls */}
-          {browserSession.status !== 'idle' && (
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleBrowsingPause}
-                disabled={browserSession.status === 'waiting_confirmation'}
-              >
-                {browserSession.status === 'paused' ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                {browserSession.status === 'paused' ? 'Resume' : 'Pause'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={stopBrowsing}
-              >
-                <Square className="w-4 h-4 mr-1" />
-                Stop
-              </Button>
+        </div>
+
+        {/* Browser Preview Panel */}
+        <div className="w-1/2 flex flex-col">
+          {/* Browser Header */}
+          <div className="p-4 border-b border-border bg-card/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1">
+                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                </div>
+                <Monitor className="w-5 h-5 text-muted-foreground" />
+                <span className="text-sm font-medium">Live Browser Preview</span>
+              </div>
+
+              {browserStatus !== 'idle' && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={browserStatus === 'paused' ? handleResume : handlePause}
+                  >
+                    {browserStatus === 'paused' ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStop}
+                  >
+                    <Square className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Browser Content */}
+          <div className="flex-1 p-4">
+            <div className="w-full h-full bg-white rounded-lg border shadow-lg overflow-hidden">
+              {screenshotUrl ? (
+                <img 
+                  ref={screenshotRef}
+                  src={screenshotUrl} 
+                  alt="Browser Preview" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/30 to-muted/50">
+                  <div className="text-center space-y-4">
+                    <Monitor className="w-16 h-16 text-muted-foreground mx-auto" />
+                    <div>
+                      <h3 className="font-semibold text-lg">Browser Ready</h3>
+                      <p className="text-muted-foreground">Send a message to start live browsing</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          {totalSteps > 0 && (
+            <div className="p-4 border-t border-border">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Progress</span>
+                  <span className="text-muted-foreground">{currentStep + 1} / {totalSteps}</span>
+                </div>
+                <Progress value={((currentStep + 1) / totalSteps) * 100} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {browserStatus === 'running' ? 'AI is working...' : 
+                   browserStatus === 'paused' ? 'Paused' : 
+                   browserStatus === 'completed' ? 'Task completed!' : 'Ready'}
+                </p>
+              </div>
             </div>
           )}
         </div>
-
-        {/* Browser Content */}
-        <div className="flex-1 p-4">
-          <div className="w-full h-full bg-white rounded-lg border border-border overflow-hidden shadow-lg">
-            <img 
-              src={browserSession.screenshotUrl} 
-              alt="Browser Preview" 
-              className="w-full h-full object-cover"
-              style={{ imageRendering: 'crisp-edges' }}
-            />
-          </div>
-        </div>
-
-        {/* Step Progress */}
-        {browserSession.steps.length > 0 && (
-          <div className="p-4 border-t border-border">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>AI Progress</span>
-                <span>{browserSession.currentStep + 1} / {browserSession.steps.length}</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${((browserSession.currentStep + 1) / browserSession.steps.length) * 100}%` }}
-                ></div>
-              </div>
-              <p className="text-sm">
-                {browserSession.steps[browserSession.currentStep] || 'Initializing...'}
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

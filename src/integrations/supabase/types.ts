@@ -14,7 +14,119 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      browser_actions: {
+        Row: {
+          action_type: string
+          coordinates: Json | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input_text: string | null
+          screenshot_url: string | null
+          session_id: string
+          success: boolean | null
+          target_element: string | null
+        }
+        Insert: {
+          action_type: string
+          coordinates?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_text?: string | null
+          screenshot_url?: string | null
+          session_id: string
+          success?: boolean | null
+          target_element?: string | null
+        }
+        Update: {
+          action_type?: string
+          coordinates?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_text?: string | null
+          screenshot_url?: string | null
+          session_id?: string
+          success?: boolean | null
+          target_element?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "browser_actions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "browser_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      browser_sessions: {
+        Row: {
+          created_at: string
+          current_url: string | null
+          id: string
+          last_action: string | null
+          screenshot_url: string | null
+          session_name: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_url?: string | null
+          id?: string
+          last_action?: string | null
+          screenshot_url?: string | null
+          session_name?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_url?: string | null
+          id?: string
+          last_action?: string | null
+          screenshot_url?: string | null
+          session_name?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

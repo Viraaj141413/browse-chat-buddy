@@ -1,30 +1,29 @@
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Bot, Globe, Mic, MessageSquare, Play, CheckCircle, Eye, Settings } from "lucide-react";
 
-interface LandingPageProps {
-  onGetStarted: () => void;
-}
+export const LandingPage = () => {
+  const navigate = useNavigate();
 
-export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-primary/5">
       {/* Header */}
-      <header className="border-b border-border/20 backdrop-blur-md bg-background/50">
+      <header className="border-b border-border/20 backdrop-blur-md bg-card/50">
         <div className="container mx-auto px-4 py-6 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-primary rounded-xl flex items-center justify-center">
-              <Bot className="h-6 w-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-r from-primary to-primary/70 rounded-xl flex items-center justify-center">
+              <Bot className="h-6 w-6 text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              AI Browser
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              AI Browser Assistant
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" className="hidden sm:inline-flex">
+            <Button variant="ghost" onClick={() => navigate('/auth')}>
               Sign In
             </Button>
-            <Button onClick={onGetStarted} className="bg-gradient-primary hover:shadow-glow">
+            <Button onClick={() => navigate('/auth')} className="bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg">
               Get Started
             </Button>
           </div>
@@ -33,11 +32,11 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
 
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-24 text-center">
-        <div className="max-w-5xl mx-auto space-y-10 animate-fade-in">
+        <div className="max-w-5xl mx-auto space-y-10">
           <div className="space-y-6">
             <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight">
               Your Voice-Activated AI Assistant
-              <span className="bg-gradient-primary bg-clip-text text-transparent block mt-2">
+              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent block mt-2">
                 That Browses the Web for You
               </span>
             </h2>
@@ -49,10 +48,10 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
             <Button 
               size="lg" 
-              onClick={onGetStarted}
-              className="group bg-gradient-primary hover:shadow-glow transition-all duration-300 text-lg px-8 py-6"
+              onClick={() => navigate('/auth')}
+              className="group bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg transition-all duration-300 text-lg px-8 py-6"
             >
-              Start Chatting
+              Get Started
               <ArrowRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
             </Button>
             <Button variant="outline" size="lg" className="border-primary/30 hover:border-primary text-lg px-8 py-6">
@@ -74,7 +73,7 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
 
         <div className="grid md:grid-cols-3 gap-16 max-w-6xl mx-auto">
           <div className="text-center space-y-6 group">
-            <div className="w-20 h-20 mx-auto bg-gradient-primary rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+            <div className="w-20 h-20 mx-auto bg-gradient-to-r from-primary to-primary/70 rounded-2xl flex items-center justify-center text-primary-foreground font-bold text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
               1
             </div>
             <h4 className="text-2xl font-bold">Speak or type your request</h4>
@@ -84,7 +83,7 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
           </div>
 
           <div className="text-center space-y-6 group">
-            <div className="w-20 h-20 mx-auto bg-gradient-primary rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+            <div className="w-20 h-20 mx-auto bg-gradient-to-r from-primary to-primary/70 rounded-2xl flex items-center justify-center text-primary-foreground font-bold text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
               2
             </div>
             <h4 className="text-2xl font-bold">The AI understands and acts live on the web</h4>
@@ -94,7 +93,7 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
           </div>
 
           <div className="text-center space-y-6 group">
-            <div className="w-20 h-20 mx-auto bg-gradient-primary rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+            <div className="w-20 h-20 mx-auto bg-gradient-to-r from-primary to-primary/70 rounded-2xl flex items-center justify-center text-primary-foreground font-bold text-3xl shadow-lg group-hover:scale-110 transition-transform duration-300">
               3
             </div>
             <h4 className="text-2xl font-bold">Watch the live browser preview and confirm actions</h4>
@@ -115,10 +114,10 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          <Card className="group hover:shadow-glow-accent transition-all duration-300 border-border/30 hover:border-primary/50">
+          <Card className="group hover:shadow-xl transition-all duration-300 border-border/30 hover:border-primary/50">
             <CardContent className="p-8 text-center space-y-6">
-              <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-2xl flex items-center justify-center">
-                <MessageSquare className="h-8 w-8 text-white" />
+              <div className="w-16 h-16 mx-auto bg-gradient-to-r from-primary to-primary/70 rounded-2xl flex items-center justify-center">
+                <MessageSquare className="h-8 w-8 text-primary-foreground" />
               </div>
               <h4 className="text-xl font-bold">Voice conversation powered by Gemini + ElevenLabs</h4>
               <p className="text-muted-foreground leading-relaxed">
@@ -127,10 +126,10 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-glow-accent transition-all duration-300 border-border/30 hover:border-primary/50">
+          <Card className="group hover:shadow-xl transition-all duration-300 border-border/30 hover:border-primary/50">
             <CardContent className="p-8 text-center space-y-6">
-              <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-2xl flex items-center justify-center">
-                <Eye className="h-8 w-8 text-white" />
+              <div className="w-16 h-16 mx-auto bg-gradient-to-r from-primary to-primary/70 rounded-2xl flex items-center justify-center">
+                <Eye className="h-8 w-8 text-primary-foreground" />
               </div>
               <h4 className="text-xl font-bold">Live browser automation preview</h4>
               <p className="text-muted-foreground leading-relaxed">
@@ -139,10 +138,10 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-glow-accent transition-all duration-300 border-border/30 hover:border-primary/50">
+          <Card className="group hover:shadow-xl transition-all duration-300 border-border/30 hover:border-primary/50">
             <CardContent className="p-8 text-center space-y-6">
-              <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-2xl flex items-center justify-center">
-                <Settings className="h-8 w-8 text-white" />
+              <div className="w-16 h-16 mx-auto bg-gradient-to-r from-primary to-primary/70 rounded-2xl flex items-center justify-center">
+                <Settings className="h-8 w-8 text-primary-foreground" />
               </div>
               <h4 className="text-xl font-bold">Pause, resume, and control AI anytime</h4>
               <p className="text-muted-foreground leading-relaxed">
@@ -165,8 +164,8 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
             </p>
             <Button 
               size="lg" 
-              onClick={onGetStarted}
-              className="bg-gradient-primary hover:shadow-glow text-lg px-8 py-6"
+              onClick={() => navigate('/auth')}
+              className="bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg text-lg px-8 py-6"
             >
               Start Chatting Now
               <ArrowRight className="ml-2 h-6 w-6" />
@@ -176,15 +175,15 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/20 bg-background/80 backdrop-blur-sm">
+      <footer className="border-t border-border/20 bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-16">
           <div className="grid md:grid-cols-4 gap-12">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-                  <Bot className="h-5 w-5 text-white" />
+                <div className="w-8 h-8 bg-gradient-to-r from-primary to-primary/70 rounded-lg flex items-center justify-center">
+                  <Bot className="h-5 w-5 text-primary-foreground" />
                 </div>
-                <h4 className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                <h4 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                   AI Browser
                 </h4>
               </div>
@@ -226,7 +225,7 @@ export const LandingPage = ({ onGetStarted }: LandingPageProps) => {
 
           <div className="border-t border-border/20 mt-12 pt-8 text-center">
             <p className="text-muted-foreground">
-              © 2024 AI Browser. All rights reserved. This AI assistant handles web browsing automatically. Please review actions before confirming sensitive operations.
+              © 2024 AI Browser Assistant. All rights reserved. This AI assistant handles web browsing automatically. Please review actions before confirming sensitive operations.
             </p>
           </div>
         </div>
