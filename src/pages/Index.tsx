@@ -35,7 +35,7 @@ const Index = () => {
   return (
     <>
       {appState === 'landing' && (
-        <LandingPage onGetStarted={handleGetStarted} />
+        <LandingPage />
       )}
       
       {appState === 'signup' && (
@@ -43,7 +43,7 @@ const Index = () => {
       )}
       
       {appState === 'interface' && userData && (
-        <AIInterface userName={userData.name} onLogout={handleLogout} />
+        <AIInterface />
       )}
     </>
   );
