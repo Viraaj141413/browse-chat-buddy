@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -23,9 +24,9 @@ serve(async (req) => {
   }
 
   try {
-    const { action, params, sessionId, userId } = await req.json();
+    const { action, params, sessionId, task } = await req.json();
     
-    console.log(`Browser automation request: ${action}`, { sessionId, userId });
+    console.log(`Browser automation request: ${action}`, { sessionId, params });
 
     // Get user session for authentication
     const authHeader = req.headers.get('Authorization');
@@ -41,180 +42,43 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    // Try to forward request to real BROWSER server first
-    try {
-      const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action,
-          params,
-          sessionId,
-          userId: user.id,
-          userAuth: authHeader
-        })
-      });
+    // Generate session ID if not provided
+    const currentSessionId = sessionId || `session_${Date.now()}_${user.id}`;
 
-      if (browserResponse.ok) {
-        const result = await browserResponse.json();
-        
-        return new Response(JSON.stringify({
-          success: true,
-          sessionId,
-          action,
-          result,
-          source: 'real_browser'
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      } else {
-        throw new Error(`Browser server error: ${browserResponse.status}`);
-      }
-
-    } catch (browserError) {
-      console.log('Browser server unavailable, using enhanced fallback logic');
+    // Handle different actions
+    switch (action) {
+      case 'start_session':
+        return await handleStartSession(currentSessionId, user.id, task);
       
-      // Enhanced fallback: Log the action and provide realistic mock responses
-      await supabase
-        .from('browser_actions')
-        .insert({
-          session_id: sessionId,
-          user_id: user.id,
-          action,
-          details: { ...params, fallback: true },
-          timestamp: new Date().toISOString()
-        });
-
-      // Create or update session
-      await supabase
-        .from('browser_sessions')
-        .upsert({
-          id: sessionId,
-          user_id: user.id,
-          status: 'active',
-          current_url: params?.url || null,
-          last_action: action,
-          updated_at: new Date().toISOString()
-        });
-
-      let result;
-      switch (action) {
-        case 'init':
-          result = {
-            success: true,
-            sessionId,
-            message: 'Browser session initialized (enhanced fallback mode)',
-            viewport: { width: 1280, height: 720 },
-            status: 'ready',
-            fallback: true
-          };
-          break;
-          
-        case 'navigate':
-          // Simulate navigation delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          result = {
-            success: true,
-            url: params.url,
-            title: `${getDomainFromUrl(params.url)} - Page Title`,
-            timestamp: Date.now(),
-            loadTime: '1.2s',
-            fallback: true
-          };
-          break;
-          
-        case 'click':
-          // Simulate click delay
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          result = {
-            success: true,
-            selector: params.selector,
-            element: getElementTypeFromSelector(params.selector),
-            message: `Successfully clicked ${params.selector}`,
-            timestamp: Date.now(),
-            fallback: true
-          };
-          break;
-          
-        case 'type':
-          // Simulate typing delay
-          await new Promise(resolve => setTimeout(resolve, params.text.length * 50));
-          
-          result = {
-            success: true,
-            selector: params.selector,
-            text: params.text,
-            message: `Successfully typed "${params.text}" in ${params.selector}`,
-            timestamp: Date.now(),
-            fallback: true
-          };
-          break;
-          
-        case 'screenshot':
-          // Generate a more realistic mock screenshot URL
-          const mockScreenshotUrl = generateMockScreenshotUrl(sessionId, params);
-          
-          result = {
-            success: true,
-            screenshot: mockScreenshotUrl,
-            format: 'png',
-            dimensions: { width: 1280, height: 720 },
-            timestamp: Date.now(),
-            fallback: true
-          };
-          break;
-          
-        case 'scroll':
-          // Simulate scroll delay
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          result = {
-            success: true,
-            direction: params.direction,
-            amount: params.amount,
-            newPosition: params.direction === 'down' ? 
-              `Scrolled down ${params.amount}px` : 
-              `Scrolled up ${params.amount}px`,
-            message: `Scrolled ${params.direction} by ${params.amount}px`,
-            timestamp: Date.now(),
-            fallback: true
-          };
-          break;
-
-        case 'ai_action':
-          // Simulate AI processing delay
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          const aiResult = simulateAIAction(params.instruction);
-          result = {
-            success: true,
-            instruction: params.instruction,
-            action: aiResult.action,
-            reasoning: aiResult.reasoning,
-            executed: aiResult.executed,
-            timestamp: Date.now(),
-            fallback: true
-          };
-          break;
-          
-        default:
-          throw new Error(`Unknown action: ${action}`);
-      }
-
-      return new Response(JSON.stringify({
-        success: true,
-        sessionId,
-        action,
-        result,
-        source: 'enhanced_fallback',
-        note: 'Real browser server unavailable - using intelligent simulation'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      case 'init':
+        return await handleInitBrowser(currentSessionId, user.id, params);
+      
+      case 'navigate':
+        return await handleNavigate(currentSessionId, user.id, params);
+      
+      case 'click':
+        return await handleClick(currentSessionId, user.id, params);
+      
+      case 'type':
+        return await handleType(currentSessionId, user.id, params);
+      
+      case 'screenshot':
+        return await handleScreenshot(currentSessionId, user.id);
+      
+      case 'ai_action':
+        return await handleAIAction(currentSessionId, user.id, params);
+      
+      case 'pause_session':
+        return await handlePauseSession(currentSessionId, user.id);
+      
+      case 'resume_session':
+        return await handleResumeSession(currentSessionId, user.id);
+      
+      case 'stop_session':
+        return await handleStopSession(currentSessionId, user.id);
+      
+      default:
+        throw new Error(`Unknown action: ${action}`);
     }
 
   } catch (error) {
@@ -229,112 +93,360 @@ serve(async (req) => {
   }
 });
 
-// Helper functions for enhanced fallback simulation
-function getDomainFromUrl(url: string): string {
+async function handleStartSession(sessionId: string, userId: string, task: string) {
   try {
-    const domain = new URL(url).hostname;
-    return domain.replace('www.', '');
-  } catch {
-    return 'Unknown Site';
+    // Create session in database
+    await supabase
+      .from('browser_sessions')
+      .upsert({
+        id: sessionId,
+        user_id: userId,
+        status: 'active',
+        current_url: 'about:blank',
+        last_action: 'start_session',
+        updated_at: new Date().toISOString()
+      });
+
+    // Generate AI instructions for the task
+    const steps = await generateTaskSteps(task);
+    
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      steps,
+      currentStep: 0,
+      status: 'active',
+      message: 'Browser session started successfully'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Failed to start session: ${error.message}`);
   }
 }
 
-function getElementTypeFromSelector(selector: string): string {
-  if (selector.includes('button') || selector.includes('.btn')) {
-    return 'button';
-  } else if (selector.includes('input')) {
-    return 'input field';
-  } else if (selector.includes('a') || selector.includes('link')) {
-    return 'link';
-  } else if (selector.includes('#')) {
-    return 'element by ID';
-  } else if (selector.includes('.')) {
-    return 'element by class';
-  } else {
-    return 'element';
+async function handleInitBrowser(sessionId: string, userId: string, params: any) {
+  try {
+    const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'init',
+        sessionId,
+        userId,
+        params
+      })
+    });
+
+    if (!browserResponse.ok) {
+      throw new Error(`Browser server error: ${browserResponse.status}`);
+    }
+
+    const result = await browserResponse.json();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      result,
+      source: 'real_browser'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    // Fallback to mock if real browser fails
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      result: {
+        success: true,
+        message: 'Browser initialized (fallback mode)',
+        viewport: { width: 1280, height: 720 },
+        status: 'ready'
+      },
+      source: 'fallback'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 }
 
-function generateMockScreenshotUrl(sessionId: string, params: any): string {
-  const timestamp = Date.now();
-  const context = params?.context || 'browser';
-  return `https://via.placeholder.com/1280x720/f8f9fa/333333?text=Browser+Screenshot+${context}+${timestamp}`;
+async function handleNavigate(sessionId: string, userId: string, params: any) {
+  try {
+    const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'navigate',
+        sessionId,
+        userId,
+        params
+      })
+    });
+
+    if (!browserResponse.ok) {
+      throw new Error(`Browser server error: ${browserResponse.status}`);
+    }
+
+    const result = await browserResponse.json();
+    
+    // Update session in database
+    await supabase
+      .from('browser_sessions')
+      .update({
+        current_url: params.url,
+        last_action: 'navigate',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      result,
+      source: 'real_browser'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Navigation failed: ${error.message}`);
+  }
 }
 
-function simulateAIAction(instruction: string): any {
-  const instructionLower = instruction.toLowerCase();
-  
-  if (instructionLower.includes('click') || instructionLower.includes('button')) {
-    return {
-      action: 'click',
-      reasoning: 'Detected click instruction, looking for interactive elements',
-      executed: {
-        selector: 'button[type="submit"], .btn-primary, #main-button',
-        success: true
-      }
-    };
-  } else if (instructionLower.includes('type') || instructionLower.includes('enter') || instructionLower.includes('input')) {
-    return {
-      action: 'type',
-      reasoning: 'Detected text input instruction, looking for input fields',
-      executed: {
-        selector: 'input[type="text"], textarea, .search-box',
-        text: extractTextFromInstruction(instruction),
-        success: true
-      }
-    };
-  } else if (instructionLower.includes('navigate') || instructionLower.includes('go to') || instructionLower.includes('visit')) {
-    return {
-      action: 'navigate',
-      reasoning: 'Detected navigation instruction, extracting URL or search terms',
-      executed: {
-        url: extractUrlFromInstruction(instruction),
-        success: true
-      }
-    };
-  } else if (instructionLower.includes('scroll')) {
-    return {
-      action: 'scroll',
-      reasoning: 'Detected scroll instruction, determining direction',
-      executed: {
-        direction: instructionLower.includes('up') ? 'up' : 'down',
-        amount: 500,
-        success: true
-      }
-    };
-  } else {
-    return {
-      action: 'analyze',
-      reasoning: 'Instruction requires page analysis, taking screenshot first',
-      executed: {
+async function handleClick(sessionId: string, userId: string, params: any) {
+  try {
+    const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'click',
+        sessionId,
+        userId,
+        params
+      })
+    });
+
+    if (!browserResponse.ok) {
+      throw new Error(`Browser server error: ${browserResponse.status}`);
+    }
+
+    const result = await browserResponse.json();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      result,
+      source: 'real_browser'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Click failed: ${error.message}`);
+  }
+}
+
+async function handleType(sessionId: string, userId: string, params: any) {
+  try {
+    const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'type',
+        sessionId,
+        userId,
+        params
+      })
+    });
+
+    if (!browserResponse.ok) {
+      throw new Error(`Browser server error: ${browserResponse.status}`);
+    }
+
+    const result = await browserResponse.json();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      result,
+      source: 'real_browser'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Type failed: ${error.message}`);
+  }
+}
+
+async function handleScreenshot(sessionId: string, userId: string) {
+  try {
+    const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         action: 'screenshot',
-        analysis: 'Page analyzed for relevant interactive elements',
-        success: true
+        sessionId,
+        userId
+      })
+    });
+
+    if (!browserResponse.ok) {
+      throw new Error(`Browser server error: ${browserResponse.status}`);
+    }
+
+    const result = await browserResponse.json();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      screenshotUrl: result.screenshot ? `data:image/png;base64,${result.screenshot}` : null,
+      currentStep: 0,
+      source: 'real_browser'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    // Return mock screenshot if real browser fails
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      screenshotUrl: 'https://via.placeholder.com/1280x720/f8f9fa/333333?text=Browser+Screenshot',
+      currentStep: 0,
+      source: 'fallback'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+async function handleAIAction(sessionId: string, userId: string, params: any) {
+  try {
+    const browserResponse = await fetch(`${BROWSER_SERVER_URL}/api/browser`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'ai_action',
+        sessionId,
+        userId,
+        params
+      })
+    });
+
+    if (!browserResponse.ok) {
+      throw new Error(`Browser server error: ${browserResponse.status}`);
+    }
+
+    const result = await browserResponse.json();
+    
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      result,
+      source: 'real_browser'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`AI action failed: ${error.message}`);
+  }
+}
+
+async function handlePauseSession(sessionId: string, userId: string) {
+  try {
+    await supabase
+      .from('browser_sessions')
+      .update({
+        status: 'paused',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      status: 'paused',
+      message: 'Session paused successfully'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Pause failed: ${error.message}`);
+  }
+}
+
+async function handleResumeSession(sessionId: string, userId: string) {
+  try {
+    await supabase
+      .from('browser_sessions')
+      .update({
+        status: 'active',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      status: 'active',
+      message: 'Session resumed successfully'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Resume failed: ${error.message}`);
+  }
+}
+
+async function handleStopSession(sessionId: string, userId: string) {
+  try {
+    // Stop the browser session
+    await fetch(`${BROWSER_SERVER_URL}/sessions/${sessionId}/close`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       }
-    };
+    });
+
+    // Update database
+    await supabase
+      .from('browser_sessions')
+      .update({
+        status: 'stopped',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      sessionId,
+      status: 'stopped',
+      message: 'Session stopped successfully'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    throw new Error(`Stop failed: ${error.message}`);
   }
 }
 
-function extractTextFromInstruction(instruction: string): string {
-  const matches = instruction.match(/"([^"]+)"|'([^']+)'|enter\s+([^\s]+)|type\s+([^\s]+)/i);
-  if (matches) {
-    return matches[1] || matches[2] || matches[3] || matches[4] || 'sample text';
-  }
-  return 'sample text';
-}
+async function generateTaskSteps(task: string) {
+  // Simple task breakdown - in a real app, you'd use AI for this
+  const steps = [
+    { id: 1, description: 'Initialize browser', status: 'pending' },
+    { id: 2, description: 'Navigate to target site', status: 'pending' },
+    { id: 3, description: 'Perform requested action', status: 'pending' },
+    { id: 4, description: 'Complete task', status: 'pending' }
+  ];
 
-function extractUrlFromInstruction(instruction: string): string {
-  const urlMatch = instruction.match(/https?:\/\/[^\s]+/);
-  if (urlMatch) {
-    return urlMatch[0];
-  }
-  
-  // Extract common sites
-  if (instruction.includes('google')) return 'https://www.google.com';
-  if (instruction.includes('amazon')) return 'https://www.amazon.com';
-  if (instruction.includes('youtube')) return 'https://www.youtube.com';
-  if (instruction.includes('facebook')) return 'https://www.facebook.com';
-  if (instruction.includes('twitter')) return 'https://www.twitter.com';
-  
-  return 'https://www.google.com/search?q=' + encodeURIComponent(instruction);
+  return steps;
 }

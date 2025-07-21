@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const corsHeaders = {
@@ -35,10 +36,10 @@ serve(async (req) => {
       throw new Error('Message is required')
     }
 
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY')
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not configured')
-    }
+    // Use the API key you provided
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || 'AIzaSyBzIwU6Kn_0J77zo8tgTtlJpU_y5S4LbbM'
+    
+    console.log('Using Gemini API key:', geminiApiKey ? 'Key present' : 'Key missing')
 
     // Create request for Gemini
     const geminiRequest: GeminiRequest = {
@@ -74,7 +75,7 @@ serve(async (req) => {
     if (!response.ok) {
       const error = await response.text()
       console.error('Gemini API error:', error)
-      throw new Error('Failed to get response from Gemini')
+      throw new Error(`Gemini API error: ${response.status} - ${error}`)
     }
 
     const data: GeminiResponse = await response.json()
@@ -84,6 +85,8 @@ serve(async (req) => {
     }
 
     const aiResponse = data.candidates[0].content.parts[0].text
+
+    console.log('Gemini response received successfully')
 
     return new Response(
       JSON.stringify({ 
@@ -97,7 +100,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Check if Gemini API key is valid and has proper permissions'
+      }),
       {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

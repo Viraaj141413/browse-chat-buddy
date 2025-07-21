@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -24,7 +25,8 @@ import {
   Loader2,
   Settings,
   LogOut,
-  UserCircle
+  UserCircle,
+  RefreshCw
 } from 'lucide-react';
 
 interface Message {
@@ -50,7 +52,6 @@ export const AIInterface = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [browserStatus, setBrowserStatus] = useState<BrowserStatus>('idle');
   const [currentStep, setCurrentStep] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
@@ -60,6 +61,7 @@ export const AIInterface = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const screenshotRef = useRef<HTMLImageElement>(null);
+  const screenshotInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -70,6 +72,15 @@ export const AIInterface = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Clean up screenshot polling on unmount
+  useEffect(() => {
+    return () => {
+      if (screenshotInterval.current) {
+        clearInterval(screenshotInterval.current);
+      }
+    };
+  }, []);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !user) return;
@@ -82,6 +93,7 @@ export const AIInterface = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentTask = inputMessage;
     setInputMessage('');
     setIsLoading(true);
 
@@ -93,9 +105,10 @@ export const AIInterface = () => {
       }
 
       // First, get AI response
+      console.log('Calling Gemini AI...');
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('gemini-chat', {
         body: { 
-          message: inputMessage,
+          message: currentTask,
           context: 'web browsing assistant'
         },
         headers: {
@@ -103,7 +116,12 @@ export const AIInterface = () => {
         }
       });
 
-      if (aiError) throw aiError;
+      if (aiError) {
+        console.error('Gemini AI error:', aiError);
+        throw aiError;
+      }
+
+      console.log('AI response received:', aiResponse);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -115,17 +133,23 @@ export const AIInterface = () => {
       setMessages(prev => [...prev, aiMessage]);
 
       // Then start browser automation
+      console.log('Starting browser automation...');
       const { data: browserResponse, error: browserError } = await supabase.functions.invoke('browser-automation', {
         body: {
           action: 'start_session',
-          task: inputMessage
+          task: currentTask
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`
         }
       });
 
-      if (browserError) throw browserError;
+      if (browserError) {
+        console.error('Browser automation error:', browserError);
+        throw browserError;
+      }
+
+      console.log('Browser automation response:', browserResponse);
 
       if (browserResponse.success) {
         setSessionId(browserResponse.sessionId);
@@ -133,8 +157,20 @@ export const AIInterface = () => {
         setCurrentStep(browserResponse.currentStep);
         setBrowserStatus('running');
         
-        // Start polling for screenshots
+        // Initialize the browser
+        await initializeBrowser(browserResponse.sessionId);
+        
+        // Start screenshot polling
         startScreenshotPolling(browserResponse.sessionId);
+
+        const systemMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          type: 'system',
+          content: `Browser session started (${browserResponse.sessionId}). Taking control of browser...`,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, systemMessage]);
       }
 
     } catch (error: any) {
@@ -154,7 +190,72 @@ export const AIInterface = () => {
     }
   };
 
+  const initializeBrowser = async (sessionId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await supabase.functions.invoke('browser-automation', {
+        body: {
+          action: 'init',
+          sessionId,
+          params: {
+            viewport: { width: 1280, height: 720 }
+          }
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) {
+        console.error('Browser init error:', error);
+        return;
+      }
+
+      console.log('Browser initialized:', data);
+      
+      // Navigate to a demo page
+      await navigateToPage(sessionId, 'https://www.google.com');
+      
+    } catch (error) {
+      console.error('Browser initialization error:', error);
+    }
+  };
+
+  const navigateToPage = async (sessionId: string, url: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await supabase.functions.invoke('browser-automation', {
+        body: {
+          action: 'navigate',
+          sessionId,
+          params: { url }
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) {
+        console.error('Navigation error:', error);
+        return;
+      }
+
+      console.log('Navigation result:', data);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
+  };
+
   const startScreenshotPolling = (sessionId: string) => {
+    // Clear any existing interval
+    if (screenshotInterval.current) {
+      clearInterval(screenshotInterval.current);
+    }
+
     const pollScreenshots = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -162,7 +263,7 @@ export const AIInterface = () => {
 
         const { data, error } = await supabase.functions.invoke('browser-automation', {
           body: {
-            action: 'get_screenshot',
+            action: 'screenshot',
             sessionId
           },
           headers: {
@@ -170,29 +271,24 @@ export const AIInterface = () => {
           }
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Screenshot error:', error);
+          return;
+        }
 
-        if (data.success) {
+        if (data.success && data.screenshotUrl) {
           setScreenshotUrl(data.screenshotUrl);
-          setCurrentStep(data.currentStep);
-          
-          if (data.status === 'completed') {
-            setBrowserStatus('completed');
-            return;
-          }
         }
       } catch (error) {
         console.error('Screenshot polling error:', error);
       }
     };
 
-    // Poll every 3 seconds
-    const interval = setInterval(pollScreenshots, 3000);
+    // Initial screenshot
+    pollScreenshots();
     
-    // Clean up after 5 minutes
-    setTimeout(() => {
-      clearInterval(interval);
-    }, 300000);
+    // Poll every 2 seconds
+    screenshotInterval.current = setInterval(pollScreenshots, 2000);
   };
 
   const handlePause = async () => {
@@ -216,6 +312,9 @@ export const AIInterface = () => {
 
       if (data.success) {
         setBrowserStatus('paused');
+        if (screenshotInterval.current) {
+          clearInterval(screenshotInterval.current);
+        }
         toast.success('Browser automation paused');
       }
     } catch (error: any) {
@@ -244,6 +343,7 @@ export const AIInterface = () => {
 
       if (data.success) {
         setBrowserStatus('running');
+        startScreenshotPolling(sessionId);
         toast.success('Browser automation resumed');
       }
     } catch (error: any) {
@@ -276,10 +376,43 @@ export const AIInterface = () => {
         setScreenshotUrl('');
         setCurrentStep(0);
         setTotalSteps(0);
+        
+        if (screenshotInterval.current) {
+          clearInterval(screenshotInterval.current);
+        }
+        
         toast.success('Browser automation stopped');
       }
     } catch (error: any) {
       toast.error('Failed to stop: ' + error.message);
+    }
+  };
+
+  const handleRefreshScreenshot = async () => {
+    if (!sessionId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await supabase.functions.invoke('browser-automation', {
+        body: {
+          action: 'screenshot',
+          sessionId
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success && data.screenshotUrl) {
+        setScreenshotUrl(data.screenshotUrl);
+        toast.success('Screenshot refreshed');
+      }
+    } catch (error: any) {
+      toast.error('Failed to refresh screenshot: ' + error.message);
     }
   };
 
@@ -353,14 +486,20 @@ export const AIInterface = () => {
                       <AvatarFallback className={
                         message.type === 'user' 
                           ? 'bg-primary text-primary-foreground' 
+                          : message.type === 'system'
+                          ? 'bg-orange-500 text-white'
                           : 'bg-secondary text-secondary-foreground'
                       }>
-                        {message.type === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                        {message.type === 'user' ? <User className="w-4 h-4" /> : 
+                         message.type === 'system' ? <Monitor className="w-4 h-4" /> :
+                         <Bot className="w-4 h-4" />}
                       </AvatarFallback>
                     </Avatar>
                     <Card className={`${
                       message.type === 'user' 
                         ? 'bg-primary text-primary-foreground' 
+                        : message.type === 'system'
+                        ? 'bg-orange-500 text-white'
                         : 'bg-muted'
                     }`}>
                       <CardContent className="p-3">
@@ -442,24 +581,34 @@ export const AIInterface = () => {
                 <span className="text-sm font-medium">Live Browser Preview</span>
               </div>
 
-              {browserStatus !== 'idle' && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={browserStatus === 'paused' ? handleResume : handlePause}
-                  >
-                    {browserStatus === 'paused' ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleStop}
-                  >
-                    <Square className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshScreenshot}
+                  disabled={!sessionId}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+                {browserStatus !== 'idle' && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={browserStatus === 'paused' ? handleResume : handlePause}
+                    >
+                      {browserStatus === 'paused' ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStop}
+                    >
+                      <Square className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -480,6 +629,9 @@ export const AIInterface = () => {
                     <div>
                       <h3 className="font-semibold text-lg">Browser Ready</h3>
                       <p className="text-muted-foreground">Send a message to start live browsing</p>
+                      {sessionId && (
+                        <p className="text-xs text-muted-foreground mt-2">Session: {sessionId}</p>
+                      )}
                     </div>
                   </div>
                 </div>
