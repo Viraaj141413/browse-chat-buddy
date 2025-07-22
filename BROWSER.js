@@ -40,8 +40,8 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdnb2ptZmJwc3F6Y3lhenduaWJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5NDIwNTEsImV4cCI6MjA2ODUxODA1MX0.1Q7rWqqg3REYUI7pqT36hJXkKbO2njS3ZhVpvtHWaKw'
 );
 
-// Gemini AI client
-const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+// Gemini AI client - using provided API key
+const genAI = new GoogleGenerativeAI('AIzaSyBzIwU6Kn_0J77zo8tgTtlJpU_y5S4LbbM');
 
 // Middleware
 app.use(cors());

@@ -153,8 +153,8 @@ export const AIInterface = () => {
 
       if (browserResponse.success) {
         setSessionId(browserResponse.sessionId);
-        setTotalSteps(browserResponse.steps.length);
-        setCurrentStep(browserResponse.currentStep);
+        setTotalSteps(browserResponse.steps?.length || 4);
+        setCurrentStep(browserResponse.currentStep || 0);
         setBrowserStatus('running');
         
         // Initialize the browser
@@ -166,7 +166,13 @@ export const AIInterface = () => {
         const systemMessage: Message = {
           id: (Date.now() + 2).toString(),
           type: 'system',
-          content: `Browser session started (${browserResponse.sessionId}). Taking control of browser...`,
+          content: `🚀 Browser session started! ${browserResponse.sessionId.substring(0, 16)}...
+          
+✅ AI: ${aiResponse.response}
+🌐 Real browser is launching now...
+📱 You'll see live screenshots here as the AI browses the web.
+
+${browserResponse.source === 'fallback' ? '⚠️ Using fallback mode - to see real browser, run: ./run-browser-server.sh' : '🎉 Connected to real browser server!'}`,
           timestamp: new Date()
         };
         

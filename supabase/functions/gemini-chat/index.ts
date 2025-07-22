@@ -36,8 +36,8 @@ serve(async (req) => {
       throw new Error('Message is required')
     }
 
-    // Use the API key you provided
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || 'AIzaSyBzIwU6Kn_0J77zo8tgTtlJpU_y5S4LbbM'
+    // Use the provided API key directly for immediate testing
+    const geminiApiKey = 'AIzaSyBzIwU6Kn_0J77zo8tgTtlJpU_y5S4LbbM'
     
     console.log('Using Gemini API key:', geminiApiKey ? 'Key present' : 'Key missing')
 
