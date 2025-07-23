@@ -6,6 +6,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('CloudAI WebSocket function called');
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -20,6 +22,7 @@ serve(async (req) => {
     });
   }
 
+  console.log('Upgrading to WebSocket...');
   const { socket, response } = Deno.upgradeWebSocket(req);
   
   let browser: any = null;

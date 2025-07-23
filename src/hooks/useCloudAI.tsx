@@ -36,15 +36,11 @@ export const useCloudAI = () => {
       return;
     }
 
-    // Try different server URLs - use Supabase edge function first
+    // Use Supabase edge function WebSocket endpoint
     const serverUrl = 'wss://jftihcyjhsqnoxfhnpmo.supabase.co/functions/v1/cloudai-websocket';
     
-    try {
-      ws.current = new WebSocket(serverUrl);
-    } catch (e) {
-      // Fallback to localhost for development
-      ws.current = new WebSocket('ws://localhost:8080');
-    }
+    console.log('Connecting to CloudAI WebSocket:', serverUrl);
+    ws.current = new WebSocket(serverUrl);
     
     ws.current.onopen = () => {
       console.log('Connected to CloudAI server');

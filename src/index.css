@@ -2,6 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --background: 220 23% 95%;
+    --foreground: 220 13% 9%;
+    --card: 220 23% 98%;
+    --card-foreground: 220 13% 9%;
+    --popover: 220 23% 95%;
+    --popover-foreground: 220 13% 9%;
+    --primary: 262 100% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 91%;
+    --secondary-foreground: 220 13% 9%;
+    --muted: 220 14% 91%;
+    --muted-foreground: 220 13% 45%;
+    --accent: 220 14% 91%;
+    --accent-foreground: 220 13% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 262 100% 65%;
+    --radius: 0.5rem;
+    
+    /* Custom gradients and effects */
+    --gradient-primary: linear-gradient(135deg, hsl(262 100% 65%), hsl(292 100% 70%));
+    --shadow-glow: 0 0 40px hsl(262 100% 65% / 0.3);
+  }
+
+  .dark {
+    --background: 220 27% 8%;
+    --foreground: 220 13% 91%;
+    --card: 220 27% 10%;
+    --card-foreground: 220 13% 91%;
+    --popover: 220 27% 8%;
+    --popover-foreground: 220 13% 91%;
+    --primary: 262 100% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 13% 15%;
+    --secondary-foreground: 220 13% 91%;
+    --muted: 220 13% 15%;
+    --muted-foreground: 220 13% 55%;
+    --accent: 220 13% 15%;
+    --accent-foreground: 220 13% 91%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 20%;
+    --input: 220 13% 20%;
+    --ring: 262 100% 65%;
+  }
+}
+
+@layer utilities {
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
 /* AI Conversational Interface Design System */
 
 @layer base {
