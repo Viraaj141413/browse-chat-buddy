@@ -21,7 +21,7 @@ import {
 
 export const CloudAIInterface = () => {
   const [inputMessage, setInputMessage] = useState('');
-  const { messages, browserState, isLoading, sendCommand, connect } = useCloudAI();
+  const { messages, browserState, isLoading, sendCommand, connect, startBrowser, stopBrowser } = useCloudAI();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,12 +91,12 @@ export const CloudAIInterface = () => {
               {getStatusText()}
             </Badge>
             <Button 
-              variant="outline" 
+              variant={browserState.browserRunning ? "destructive" : "default"}
               size="sm" 
-              onClick={connect}
-              disabled={browserState.connected}
+              onClick={browserState.browserRunning ? stopBrowser : startBrowser}
+              disabled={isLoading}
             >
-              {browserState.connected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+              {browserState.browserRunning ? "Stop" : "Start"}
             </Button>
           </div>
         </div>
@@ -177,12 +177,12 @@ export const CloudAIInterface = () => {
                 onKeyPress={handleKeyPress}
                 placeholder="Type your command... (e.g., 'search for cats', 'go to youtube.com')"
                 className="flex-1"
-                disabled={isLoading || !browserState.connected}
+                disabled={isLoading || !browserState.browserRunning}
               />
               <Button 
                 onClick={handleSendMessage} 
                 size="icon"
-                disabled={isLoading || !inputMessage.trim() || !browserState.connected}
+                disabled={isLoading || !inputMessage.trim() || !browserState.browserRunning}
               >
                 <Send className="w-4 h-4" />
               </Button>

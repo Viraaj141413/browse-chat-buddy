@@ -13,6 +13,7 @@ interface BrowserState {
   currentUrl: string;
   screenshot: string;
   status: string;
+  browserRunning: boolean;
 }
 
 export const useCloudAI = () => {
@@ -21,7 +22,8 @@ export const useCloudAI = () => {
     connected: false,
     currentUrl: '',
     screenshot: '',
-    status: 'disconnected'
+    status: 'disconnected',
+    browserRunning: false
   });
   const [isLoading, setIsLoading] = useState(false);
   
@@ -34,7 +36,11 @@ export const useCloudAI = () => {
       return;
     }
 
-    ws.current = new WebSocket('ws://localhost:8080');
+    // Try different server URLs
+    const serverUrl = window.location.protocol === 'https:' 
+      ? 'wss://loving-browser-assistant.onrender.com' 
+      : 'ws://localhost:8080';
+    ws.current = new WebSocket(serverUrl);
     
     ws.current.onopen = () => {
       console.log('Connected to CloudAI server');
@@ -60,7 +66,8 @@ export const useCloudAI = () => {
         case 'init_response':
           setBrowserState(prev => ({
             ...prev,
-            status: data.success ? 'browser_ready' : 'browser_error'
+            status: data.success ? 'browser_ready' : 'browser_error',
+            browserRunning: data.success
           }));
           
           if (data.success) {
@@ -142,6 +149,31 @@ export const useCloudAI = () => {
     }));
   };
 
+  const startBrowser = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      connect();
+      return;
+    }
+    
+    ws.current.send(JSON.stringify({ type: 'init' }));
+    setBrowserState(prev => ({ ...prev, status: 'connecting' }));
+  };
+
+  const stopBrowser = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    
+    ws.current.send(JSON.stringify({ type: 'stop' }));
+    setBrowserState(prev => ({ 
+      ...prev, 
+      status: 'disconnected', 
+      browserRunning: false,
+      screenshot: '',
+      currentUrl: ''
+    }));
+  };
+
   useEffect(() => {
     connect();
     
@@ -157,6 +189,8 @@ export const useCloudAI = () => {
     browserState,
     isLoading,
     sendCommand,
-    connect
+    connect,
+    startBrowser,
+    stopBrowser
   };
 };

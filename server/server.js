@@ -93,7 +93,7 @@ async function initializeBrowser() {
     }
 
     browser = await puppeteer.launch({
-      headless: false,
+      headless: true,
       defaultViewport: { width: 1280, height: 720 },
       args: [
         '--no-sandbox',
@@ -229,6 +229,23 @@ wss.on('connection', (ws) => {
             action: action,
             result: result,
             originalMessage: data.message
+          }));
+          break;
+
+        case 'stop':
+          if (screenshotInterval) {
+            clearInterval(screenshotInterval);
+            screenshotInterval = null;
+          }
+          if (browser) {
+            await browser.close();
+            browser = null;
+            page = null;
+          }
+          ws.send(JSON.stringify({
+            type: 'stop_response',
+            success: true,
+            message: 'Browser stopped'
           }));
           break;
 
