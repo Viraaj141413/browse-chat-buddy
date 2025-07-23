@@ -175,7 +175,7 @@ export const CloudAIInterface = () => {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your command... (e.g., 'search for cats', 'go to youtube.com')"
+                placeholder="Type your command... (e.g., 'search for cats', 'go to youtube.com', 'click login button')"
                 className="flex-1"
                 disabled={isLoading || !browserState.browserRunning}
               />
@@ -232,7 +232,7 @@ export const CloudAIInterface = () => {
                   <div>
                     <h3 className="font-semibold text-lg text-gray-700">Browser Preview</h3>
                     <p className="text-gray-500">
-                      {browserState.connected ? 'Starting browser...' : 'Connect to start browsing'}
+                      {browserState.connected ? 'Starting browser...' : 'Click Start to begin browsing'}
                     </p>
                   </div>
                 </div>

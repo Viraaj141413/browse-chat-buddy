@@ -36,11 +36,15 @@ export const useCloudAI = () => {
       return;
     }
 
-    // Try different server URLs
-    const serverUrl = window.location.protocol === 'https:' 
-      ? 'wss://loving-browser-assistant.onrender.com' 
-      : 'ws://localhost:8080';
-    ws.current = new WebSocket(serverUrl);
+    // Try different server URLs - use Supabase edge function first
+    const serverUrl = 'wss://jftihcyjhsqnoxfhnpmo.supabase.co/functions/v1/cloudai-websocket';
+    
+    try {
+      ws.current = new WebSocket(serverUrl);
+    } catch (e) {
+      // Fallback to localhost for development
+      ws.current = new WebSocket('ws://localhost:8080');
+    }
     
     ws.current.onopen = () => {
       console.log('Connected to CloudAI server');
@@ -85,17 +89,38 @@ export const useCloudAI = () => {
           
         case 'command_response':
           setIsLoading(false);
-          addMessage({
-            type: 'ai',
-            content: `Executed: ${data.action.action} - ${data.result.success ? 'Success' : 'Failed: ' + data.result.error}`
-          });
+          if (data.result.success) {
+            addMessage({
+              type: 'ai',
+              content: `✅ ${data.action.action}: ${data.result.message || 'Success'}`
+            });
+          } else {
+            addMessage({
+              type: 'ai', 
+              content: `❌ Failed to ${data.action.action}: ${data.result.error}`
+            });
+          }
           break;
           
         case 'error':
           setIsLoading(false);
           addMessage({
             type: 'system',
-            content: `Error: ${data.message}`
+            content: `❌ Error: ${data.message}`
+          });
+          break;
+          
+        case 'stop_response':
+          setBrowserState(prev => ({
+            ...prev,
+            browserRunning: false,
+            status: 'disconnected',
+            screenshot: '',
+            currentUrl: ''
+          }));
+          addMessage({
+            type: 'system',
+            content: '🛑 Browser stopped'
           });
           break;
       }
